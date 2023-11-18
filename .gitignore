@@ -1,0 +1,4 @@
+/target
+
+database.sqlite*
+web/*.json

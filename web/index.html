@@ -1,0 +1,112 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Contributors</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+      body {
+        width: 80%;
+        margin: auto;
+      }
+      canvas {
+        margin: 3rem 0;
+      }
+    </style>
+  </head>
+  <body>
+    <canvas id="results_first_time_contributions_5"></canvas>
+    <canvas id="results_first_time_contributions_8"></canvas>
+    <canvas id="results_pull_requests"></canvas>
+
+    <script>
+      const urlParams = new URLSearchParams(window.location.search);
+      const titleSuffix = urlParams.get("org")
+        ? ` to ${urlParams.get("org")}`
+        : "";
+
+      const title = (text) => ({
+        plugins: {
+          title: {
+            display: true,
+            font: {
+              size: 24,
+            },
+            text: `${text}`,
+          },
+        },
+      });
+      [
+        "results_first_time_contributions_5",
+        "results_first_time_contributions_8",
+      ].forEach((id) => {
+        fetch(`${id}.json?_t=${new Date().getTime()}`)
+          .then((response) => response.json())
+          .then((data) => {
+            const months = data.map((item) => item.month);
+            const counts = data.map((item) => item.count);
+
+            const ctx = document.getElementById(id).getContext("2d");
+            const barChart = new Chart(ctx, {
+              type: "bar",
+              data: {
+                labels: months,
+                datasets: [
+                  {
+                    label: "First Time Contributors",
+                    data: counts,
+                    backgroundColor: "rgb(39 174 96 / 60%)",
+                  },
+                ],
+              },
+              options: title("First Time Contributors" + titleSuffix),
+            });
+          })
+          .catch((error) => console.error("Error fetching data:", error));
+      });
+
+      fetch(`results_pull_requests.json?_t=${new Date().getTime()}`)
+        .then((response) => response.json())
+        .then((data) => {
+          const months = data.map((item) => item.month);
+          const by_members = data.map((item) => item.by_members);
+          const by_non_members = data.map((item) => item.by_non_members);
+
+          const ctx = document
+            .getElementById("results_pull_requests")
+            .getContext("2d");
+          const barChart = new Chart(ctx, {
+            type: "bar",
+            data: {
+              labels: months,
+              datasets: [
+                {
+                  label: "By Team Members",
+                  data: by_members,
+                  // backgroundColor: "#f39c12",
+                },
+                {
+                  label: "By Community",
+                  data: by_non_members,
+                  // backgroundColor: "#16a085",
+                },
+              ],
+            },
+            options: {
+              ...title("Total Pull Requests" + titleSuffix),
+              scales: {
+                x: {
+                  stacked: true,
+                },
+                y: {
+                  stacked: true,
+                },
+              },
+            },
+          });
+        })
+        .catch((error) => console.error("Error fetching data:", error));
+    </script>
+  </body>
+</html>
