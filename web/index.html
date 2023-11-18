@@ -5,6 +5,8 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Contributors</title>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@3.0.0/dist/chart.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-stacked100@1.0.0"></script>
     <style>
       body {
         width: 80%;
@@ -21,6 +23,8 @@
     <canvas id="results_pull_requests"></canvas>
 
     <script>
+      Chart.register(ChartjsPluginStacked100.default);
+
       const urlParams = new URLSearchParams(window.location.search);
       const titleSuffix = urlParams.get("org")
         ? ` to ${urlParams.get("org")}`
@@ -84,12 +88,12 @@
                 {
                   label: "By Team Members",
                   data: by_members,
-                  // backgroundColor: "#f39c12",
+                  backgroundColor: "rgb(61 161 230 / 60%)",
                 },
                 {
                   label: "By Community",
                   data: by_non_members,
-                  // backgroundColor: "#16a085",
+                  backgroundColor: "rgb(252 103 132 / 60%)",
                 },
               ],
             },
@@ -103,6 +107,9 @@
                   stacked: true,
                 },
               },
+              // plugins: {
+              //   stacked100: { enable: true, replaceTooltipLabel: false },
+              // },
             },
           });
         })
