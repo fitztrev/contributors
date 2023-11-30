@@ -1,4 +1,8 @@
 use actix_files as fs;
+use async_openai::{
+    types::{ChatCompletionRequestUserMessageArgs, CreateChatCompletionRequestArgs},
+    Client,
+};
 use std::{env, fs::File, io::Write};
 
 use actix_web::{App, HttpServer};
@@ -22,6 +26,18 @@ struct MonthlyPullRequests {
     by_non_members: i32,
 }
 
+#[allow(dead_code)]
+#[derive(Debug)]
+struct MergedPullRequest {
+    id: i32,
+    repo: String,
+    pr_num: i32,
+    username: String,
+    title: String,
+    created_at: String,
+    merged_at: String,
+}
+
 #[tokio::main]
 async fn main() {
     let args: Vec<String> = std::env::args().collect();
@@ -41,6 +57,13 @@ async fn main() {
             results_first_time_contributions(8).unwrap(); // monthly
             results_pull_requests().unwrap();
         }
+        "changelog" => {
+            list_merged_pull_requests(&args[2], &args[3], true).unwrap();
+            list_merged_pull_requests(&args[2], &args[3], false).unwrap();
+        }
+        "summary" => {
+            summarize(&args[2], &args[3]).await.unwrap();
+        }
         "serve" => {
             let port = args
                 .get(2)
@@ -55,6 +78,15 @@ async fn main() {
 async fn fetch(org: &str) -> octocrab::Result<()> {
     let conn = Connection::open("database.sqlite").unwrap();
     conn.execute(
+        "CREATE TABLE IF NOT EXISTS members (
+            id              INTEGER PRIMARY KEY,
+            username        TEXT NOT NULL,
+            UNIQUE(username)
+        )",
+        [],
+    )
+    .unwrap();
+    conn.execute(
         "CREATE TABLE IF NOT EXISTS pull_requests (
             id              INTEGER PRIMARY KEY,
             repo            TEXT NOT NULL,
@@ -64,15 +96,6 @@ async fn fetch(org: &str) -> octocrab::Result<()> {
             created_at      TEXT NOT NULL,
             merged_at       TEXT,
             UNIQUE(repo, pr_num)
-        )",
-        [],
-    )
-    .unwrap();
-    conn.execute(
-        "CREATE TABLE IF NOT EXISTS members (
-            id              INTEGER PRIMARY KEY,
-            username        TEXT NOT NULL,
-            UNIQUE(username)
         )",
         [],
     )
@@ -173,7 +196,6 @@ fn results_first_time_contributions(length: u8) -> rusqlite::Result<()> {
                 FROM pull_requests
                 GROUP BY username
         )
-        WHERE date >= '2017'
         GROUP BY date
         ORDER BY date ASC
     "
@@ -216,7 +238,6 @@ fn results_pull_requests() -> rusqlite::Result<()> {
             pull_requests pr
         LEFT JOIN
             members m ON pr.username = m.username
-        WHERE month >= '2017-01'
         GROUP BY
             month
         ORDER BY
@@ -244,6 +265,194 @@ fn results_pull_requests() -> rusqlite::Result<()> {
     .unwrap();
 
     println!("Results written to {filename}");
+
+    Ok(())
+}
+
+fn list_merged_pull_requests(
+    since: &String,
+    until: &String,
+    by_members: bool,
+) -> rusqlite::Result<()> {
+    let conn = Connection::open("database.sqlite").unwrap();
+
+    let query = if by_members {
+        format!(
+            "SELECT *
+                FROM pull_requests
+                WHERE merged_at >= '{since}' AND merged_at <= '{until}'
+                AND username IN (SELECT username FROM members);"
+        )
+    } else {
+        format!(
+            "SELECT *
+                FROM pull_requests
+                WHERE merged_at >= '{since}' AND merged_at <= '{until}'
+                AND username NOT IN (SELECT username FROM members);"
+        )
+    };
+
+    let mut stmt = conn.prepare(query.as_str())?;
+
+    let prs = stmt.query_map([], |row| {
+        Ok(MergedPullRequest {
+            id: row.get(0)?,
+            repo: row.get(1)?,
+            pr_num: row.get(2)?,
+            username: row.get(3)?,
+            title: row.get(4)?,
+            created_at: row.get(5)?,
+            merged_at: row.get(6)?,
+        })
+    })?;
+
+    let prs: Vec<_> = prs.collect::<rusqlite::Result<_>>()?;
+
+    // create a Markdown list of PRs
+    let mut changelog = String::new();
+    for pr in prs {
+        changelog.push_str(&format!(
+            "* {title} [#{pr_num}](https://github.com/lichess-org/{repo}/pull/{pr_num}) (thanks [{username}](https://github.com/{username}))\n",
+            title = capitalize_first_letter(&pr.title),
+            pr_num = pr.pr_num,
+            repo = pr.repo,
+            username = pr.username,
+        ));
+    }
+
+    let filename = if by_members {
+        "web/changelog_members.md"
+    } else {
+        "web/changelog_non_members.md"
+    };
+    let mut file = File::create(filename).unwrap();
+    file.write_all(changelog.as_bytes()).unwrap();
+
+    Ok(())
+}
+
+fn capitalize_first_letter(s: &str) -> String {
+    let mut c = s.chars();
+    match c.next() {
+        None => String::new(),
+        Some(f) => f.to_uppercase().collect::<String>() + c.as_str(),
+    }
+}
+
+async fn summarize(since: &String, until: &String) -> rusqlite::Result<()> {
+    let conn = Connection::open("database.sqlite").unwrap();
+
+    let mut stmt = conn.prepare(
+        "
+        SELECT
+            COUNT(CASE WHEN m.username IS NOT NULL THEN 1 END) AS count_pull_requests_by_members,
+            COUNT(CASE WHEN m.username IS NULL THEN 1 END) AS count_pull_requests_by_non_members
+        FROM
+            pull_requests pr
+        LEFT JOIN
+            members m ON pr.username = m.username
+        WHERE
+            pr.merged_at >= ?1 AND pr.merged_at <= ?2;
+    ",
+    )?;
+    let mut rows = stmt.query([since, until])?;
+    let row = rows.next().unwrap().unwrap();
+    let count_pull_requests_by_members: i32 = row.get(0)?;
+    let count_pull_requests_by_non_members: i32 = row.get(1)?;
+
+    let mut stmt = conn.prepare(
+        "
+        SELECT
+            count(*),
+            count(distinct username),
+            count(distinct repo)
+        FROM
+            pull_requests pr
+        WHERE
+            pr.created_at >= ?1 AND pr.created_at <= ?2;;
+        ",
+    )?;
+    let mut rows = stmt.query([since, until])?;
+    let row = rows.next().unwrap().unwrap();
+    let count_pull_requests: i32 = row.get(0)?;
+    let count_contributors: i32 = row.get(1)?;
+    let count_repos: i32 = row.get(2)?;
+
+    let mut stmt = conn.prepare(
+        "
+        SELECT
+            count(distinct username)
+        FROM
+            pull_requests pr
+        WHERE
+            pr.created_at >= ?1 AND pr.created_at <= ?2
+            AND username NOT IN
+                (SELECT distinct username FROM pull_requests WHERE created_at < ?1);
+        ",
+    )?;
+    let mut rows = stmt.query([since, until])?;
+    let row: &rusqlite::Row<'_> = rows.next().unwrap().unwrap();
+    let new_contributors: i32 = row.get(0)?;
+
+    let summary = format!(
+        "```
+        Summary for {since} to {until}
+        ------------------------------------
+
+        Total pull requests: {count_pull_requests}
+        Total repos with pull requests: {count_repos}
+        Total contributors: {count_contributors}
+        First time contributors: {new_contributors}
+
+        Merged pull requests (from team members): {count_pull_requests_by_members}
+        Merged pull requests (from community members): {count_pull_requests_by_non_members}
+    ```"
+    );
+
+    println!("{summary}");
+
+    println!("**Summary idea:**");
+    openai_prompt(&format!(
+        "Write a short paragraph summarizing this data for the intro of a blog post: {summary}"
+    ))
+    .await
+    .unwrap();
+
+    println!("**Tweet ideas:**");
+    openai_prompt(&format!(
+        "Write 5 ideas for Twitter posts about this summary. Respond with just the list. {summary}"
+    ))
+    .await
+    .unwrap();
+
+    Ok(())
+}
+
+async fn openai_prompt(prompt: &str) -> Result<(), Box<dyn std::error::Error>> {
+    if env::var("OPENAI_API_KEY").is_err() {
+        println!("Skipping OpenAI API call until OPENAI_API_KEY is set");
+        return Ok(());
+    }
+
+    let client = Client::new();
+
+    let request = CreateChatCompletionRequestArgs::default()
+        .model("gpt-4")
+        .messages([ChatCompletionRequestUserMessageArgs::default()
+            .content(prompt)
+            .build()?
+            .into()])
+        .build()?;
+
+    let response = client.chat().create(request).await?;
+
+    for choice in response.choices {
+        let message = choice.message.content.unwrap();
+
+        for line in message.split('\n') {
+            println!("{line}");
+        }
+    }
 
     Ok(())
 }

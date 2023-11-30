@@ -4,6 +4,7 @@
 
     ```bash
     export GITHUB_TOKEN=ghp_abc123
+    export OPENAI_API_KEY=sk-abc123
     ```
 
 2. Fetch the data from Github
@@ -19,12 +20,16 @@
 
     delete from pull_requests where username in ('dependabot[bot]', 'dependabot-preview[bot]', 'scala-steward');
     delete from pull_requests where title like 'New Crowdin %';
+
+    insert into members (username) values ('user1'), ('user2');
     ```
 
 4. Format the data
 
     ```bash
     cargo run -- results
+    cargo run -- changelog 2023-11-01 2023-11-30
+    cargo run -- summary 2023-11-01 2023-11-30
     ```
 
 5. View the report
@@ -43,5 +48,7 @@ sqlite3 database.sqlite
 .tables
 select count(*) from pull_requests;
 select * from pull_requests order by created_at asc limit 10;
-select count(distinct username) from pull_requests where created_at >= '2023';
+
+select count(distinct username) from pull_requests where created_at >= '2023-01-01' and created_at <= '2023-12-31';
+select count(*) from pull_requests where created_at >= '2023-01-01' and created_at <= '2023-12-31';
 ```
