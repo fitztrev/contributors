@@ -4,7 +4,7 @@
 
     ```bash
     export GITHUB_TOKEN=ghp_abc123
-    export OPENAI_API_KEY=sk-abc123
+    export OPENAI_API_KEY=sk-abc123 # optional
     ```
 
 2. Fetch the data from Github
