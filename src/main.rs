@@ -53,9 +53,9 @@ async fn main() {
             fetch(org).await.unwrap();
         }
         "results" => {
-            results_first_time_contributions(5).unwrap(); // yearly
-            results_first_time_contributions(8).unwrap(); // monthly
-            results_pull_requests().unwrap();
+            results_first_time_contributions(&args[2], &args[3], 5).unwrap(); // yearly
+            results_first_time_contributions(&args[2], &args[3], 8).unwrap(); // monthly
+            results_pull_requests(&args[2], &args[3]).unwrap();
         }
         "changelog" => {
             list_merged_pull_requests(&args[2], &args[3], true).unwrap();
@@ -185,7 +185,11 @@ async fn fetch(org: &str) -> octocrab::Result<()> {
     Ok(())
 }
 
-fn results_first_time_contributions(length: u8) -> rusqlite::Result<()> {
+fn results_first_time_contributions(
+    since: &String,
+    until: &String,
+    length: u8,
+) -> rusqlite::Result<()> {
     let conn = Connection::open("database.sqlite").unwrap();
     let mut stmt = conn.prepare(
         format!(
@@ -193,7 +197,9 @@ fn results_first_time_contributions(length: u8) -> rusqlite::Result<()> {
         SELECT first_date as date, COUNT(username) as count
         from (
             SELECT username, substr(MIN(created_at), 0, {length}) AS first_date
-                FROM pull_requests
+                FROM pull_requests pr
+                WHERE
+                    pr.created_at >= '{since}' AND pr.created_at <= '{until}'
                 GROUP BY username
         )
         GROUP BY date
@@ -226,10 +232,11 @@ fn results_first_time_contributions(length: u8) -> rusqlite::Result<()> {
     Ok(())
 }
 
-fn results_pull_requests() -> rusqlite::Result<()> {
+fn results_pull_requests(since: &String, until: &String) -> rusqlite::Result<()> {
     let conn = Connection::open("database.sqlite").unwrap();
     let mut stmt = conn.prepare(
-        "
+        format!(
+            "
         SELECT
             substr(pr.created_at, 0, 8) AS month,
             COUNT(CASE WHEN m.username IS NOT NULL THEN 1 END) AS count_pull_requests_by_members,
@@ -238,11 +245,15 @@ fn results_pull_requests() -> rusqlite::Result<()> {
             pull_requests pr
         LEFT JOIN
             members m ON pr.username = m.username
+        WHERE
+            pr.created_at >= '{since}' AND pr.created_at <= '{until}'
         GROUP BY
             month
         ORDER BY
             month;
-    ",
+    "
+        )
+        .as_str(),
     )?;
 
     let month_results = stmt.query_map([], |row| {

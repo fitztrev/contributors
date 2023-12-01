@@ -27,7 +27,7 @@
 4. Format the data
 
     ```bash
-    cargo run -- results
+    cargo run -- results 2000-01-01 2023-11-30
     cargo run -- changelog 2023-11-01 2023-11-30
     cargo run -- summary "Lichess" 2023-11-01 2023-11-30
     ```
