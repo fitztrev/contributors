@@ -62,7 +62,7 @@ async fn main() {
             list_merged_pull_requests(&args[2], &args[3], false).unwrap();
         }
         "summary" => {
-            summarize(&args[2], &args[3]).await.unwrap();
+            summarize(&args[2], &args[3], &args[4]).await.unwrap();
         }
         "serve" => {
             let port = args
@@ -339,7 +339,7 @@ fn capitalize_first_letter(s: &str) -> String {
     }
 }
 
-async fn summarize(since: &String, until: &String) -> rusqlite::Result<()> {
+async fn summarize(org_name: &String, since: &String, until: &String) -> rusqlite::Result<()> {
     let conn = Connection::open("database.sqlite").unwrap();
 
     let mut stmt = conn.prepare(
@@ -396,8 +396,8 @@ async fn summarize(since: &String, until: &String) -> rusqlite::Result<()> {
 
     let summary = format!(
         "```
-        Summary for {since} to {until}
-        ------------------------------------
+        {org_name} Github Summary for {since} to {until}
+        ---------------------------------------------------
 
         Total pull requests: {count_pull_requests}
         Total repos with pull requests: {count_repos}
@@ -405,8 +405,7 @@ async fn summarize(since: &String, until: &String) -> rusqlite::Result<()> {
         First time contributors: {new_contributors}
 
         Merged pull requests (from team members): {count_pull_requests_by_members}
-        Merged pull requests (from community members): {count_pull_requests_by_non_members}
-    ```"
+        Merged pull requests (from community members): {count_pull_requests_by_non_members}```"
     );
 
     println!("{summary}");
@@ -420,7 +419,7 @@ async fn summarize(since: &String, until: &String) -> rusqlite::Result<()> {
 
     println!("**Tweet ideas:**");
     openai_prompt(&format!(
-        "Write 5 ideas for Twitter posts about this summary. Respond with just the list. {summary}"
+        "Write 5 ideas for Twitter posts about this summary. Do not use emojis or hash tags. {summary}"
     ))
     .await
     .unwrap();

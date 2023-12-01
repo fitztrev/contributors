@@ -3,3 +3,5 @@
 database.sqlite*
 web/*.json
 web/changelog_*.md
+
+queries.sql

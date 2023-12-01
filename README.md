@@ -29,7 +29,7 @@
     ```bash
     cargo run -- results
     cargo run -- changelog 2023-11-01 2023-11-30
-    cargo run -- summary 2023-11-01 2023-11-30
+    cargo run -- summary "Lichess" 2023-11-01 2023-11-30
     ```
 
 5. View the report
