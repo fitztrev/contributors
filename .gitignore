@@ -5,3 +5,5 @@ web/*.json
 web/changelog_*.md
 
 queries.sql
+
+draft.md

@@ -1,3 +1,5 @@
+#![warn(clippy::pedantic)]
+
 use actix_files as fs;
 use async_openai::{
     types::{ChatCompletionRequestUserMessageArgs, CreateChatCompletionRequestArgs},
@@ -322,8 +324,14 @@ fn list_merged_pull_requests(
     // create a Markdown list of PRs
     let mut changelog = String::new();
     for pr in prs {
+        let repo_prefix: String = match pr.repo.as_str() {
+            "lila" | "lila-ws" | "lifat" => String::new(),
+            "api" => String::from("API Docs"),
+            _ => format!("{}: ", capitalize_first_letter(&pr.repo)),
+        };
+
         changelog.push_str(&format!(
-            "* {title} [#{pr_num}](https://github.com/lichess-org/{repo}/pull/{pr_num}) (thanks [{username}](https://github.com/{username}))\n",
+            "* {repo_prefix}{title} [#{pr_num}](https://github.com/lichess-org/{repo}/pull/{pr_num}) (thanks [{username}](https://github.com/{username}))\n",
             title = capitalize_first_letter(&pr.title),
             pr_num = pr.pr_num,
             repo = pr.repo,
