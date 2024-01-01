@@ -48,10 +48,19 @@
 
 ## Other Queries
 
-```
+```bash
 sqlite3 database.sqlite
 
 .tables
+```
+
+Total contributors:
+
+```sql
+select count(distinct username) from pull_requests;
+```
+
+```sql
 select count(*) from pull_requests;
 select * from pull_requests order by created_at asc limit 10;
 
