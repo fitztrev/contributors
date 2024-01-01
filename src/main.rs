@@ -326,7 +326,7 @@ fn list_merged_pull_requests(
     for pr in prs {
         let repo_prefix: String = match pr.repo.as_str() {
             "lila" | "lila-ws" | "lifat" => String::new(),
-            "api" => String::from("API Docs"),
+            "api" => String::from("API Docs: "),
             _ => format!("{}: ", capitalize_first_letter(&pr.repo)),
         };
 
