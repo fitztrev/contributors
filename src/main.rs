@@ -1,19 +1,19 @@
 #![warn(clippy::pedantic)]
 
 use actix_files as fs;
+use actix_web::{App, HttpServer};
 use async_openai::{
     types::{ChatCompletionRequestUserMessageArgs, CreateChatCompletionRequestArgs},
     Client,
 };
-use std::{env, fs::File, io::Write};
-
-use actix_web::{App, HttpServer};
+use chrono::{DateTime, LocalResult, TimeZone, Utc};
 use octocrab::{
-    models::{pulls::PullRequest, Author, Repository},
+    models::{pulls::PullRequest, repos::RepoCommit, Author, Repository},
     params, OctocrabBuilder,
 };
 use rusqlite::Connection;
 use serde::Serialize;
+use std::{env, fs::File, io::Write};
 
 #[derive(Debug, Serialize)]
 struct MonthlyNewContributors {
@@ -52,12 +52,13 @@ async fn main() {
     match args[1].as_str() {
         "fetch" => {
             let org = args.get(2).expect("Please provide an org");
-            fetch(org).await.unwrap();
+            fetch(org, &args[3], &args[4]).await.unwrap();
         }
         "results" => {
             results_first_time_contributions(&args[2], &args[3], 5).unwrap(); // yearly
             results_first_time_contributions(&args[2], &args[3], 8).unwrap(); // monthly
             results_pull_requests(&args[2], &args[3]).unwrap();
+            direct_commits().unwrap();
         }
         "changelog" => {
             list_merged_pull_requests(&args[2], &args[3], true).unwrap();
@@ -77,7 +78,8 @@ async fn main() {
     }
 }
 
-async fn fetch(org: &str) -> octocrab::Result<()> {
+#[allow(clippy::too_many_lines)]
+async fn fetch(org: &str, since: &str, until: &str) -> octocrab::Result<()> {
     let conn = Connection::open("database.sqlite").unwrap();
     conn.execute(
         "CREATE TABLE IF NOT EXISTS members (
@@ -102,10 +104,44 @@ async fn fetch(org: &str) -> octocrab::Result<()> {
         [],
     )
     .unwrap();
+    conn.execute(
+        "CREATE TABLE IF NOT EXISTS commits (
+            id              INTEGER PRIMARY KEY,
+            repo            TEXT NOT NULL,
+            sha             TEXT NOT NULL,
+            username        TEXT NOT NULL,
+            commited_at     TEXT NOT NULL,
+            message         TEXT NOT NULL,
+            url             TEXT NOT NULL,
+            UNIQUE(sha)
+        )",
+        [],
+    )
+    .unwrap();
 
     let token = env::var("GITHUB_TOKEN").expect("GITHUB_TOKEN environment variable not set");
 
     let octocrab = OctocrabBuilder::new().personal_token(token).build()?;
+
+    let date_since = Utc.with_ymd_and_hms(
+        since[0..4].parse().unwrap(),
+        since[5..7].parse().unwrap(),
+        since[8..10].parse().unwrap(),
+        0,
+        0,
+        0,
+    );
+    let date_until = Utc.with_ymd_and_hms(
+        until[0..4].parse().unwrap(),
+        until[5..7].parse().unwrap(),
+        until[8..10].parse().unwrap(),
+        23,
+        59,
+        59,
+    );
+
+    fetch_commits_for_repo(&octocrab, &conn, org, "lila", date_since, date_until).await?;
+    fetch_commits_for_repo(&octocrab, &conn, org, "mobile", date_since, date_until).await?;
 
     let mut org_members = octocrab
         .orgs(org)
@@ -179,6 +215,53 @@ async fn fetch(org: &str) -> octocrab::Result<()> {
             }
         }
         page_repos = match octocrab.get_page::<Repository>(&page_repos.next).await? {
+            Some(next_page) => next_page,
+            None => break,
+        }
+    }
+
+    Ok(())
+}
+
+async fn fetch_commits_for_repo(
+    octocrab: &octocrab::Octocrab,
+    conn: &rusqlite::Connection,
+    org: &str,
+    repo: &str,
+    date_since: LocalResult<DateTime<Utc>>,
+    date_until: LocalResult<DateTime<Utc>>,
+) -> octocrab::Result<()> {
+    let mut commits = octocrab
+        .repos(org, repo)
+        .list_commits()
+        .per_page(100)
+        .since(date_since.unwrap())
+        .until(date_until.unwrap())
+        .send()
+        .await?;
+
+    loop {
+        for commit in &commits {
+            let username = match commit.author.clone() {
+                Some(author) => author.login,
+                None => String::from("n/a"),
+            };
+
+            conn.execute(
+                "INSERT or IGNORE INTO commits (repo, sha, username, commited_at, message, url) VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
+                [
+                    repo,
+                    &commit.sha,
+                    &username,
+                    &commit.commit.clone().committer.unwrap().date.unwrap().to_rfc3339(),
+                    &commit.commit.message,
+                    &commit.html_url,
+                ],
+            )
+            .unwrap();
+        }
+
+        commits = match octocrab.get_page::<RepoCommit>(&commits.next).await? {
             Some(next_page) => next_page,
             None => break,
         }
@@ -278,6 +361,61 @@ fn results_pull_requests(since: &String, until: &String) -> rusqlite::Result<()>
     .unwrap();
 
     println!("Results written to {filename}");
+
+    Ok(())
+}
+
+fn direct_commits() -> rusqlite::Result<()> {
+    let conn = Connection::open("database.sqlite").unwrap();
+    let mut stmt = conn.prepare(
+        "
+        SELECT
+            *
+        FROM
+            commits
+        WHERE
+            username in ('ornicar', 'veloce')
+            AND message NOT LIKE '%Merge%'
+            AND message NOT LIKE '%New Crowdin updates%'
+            AND message NOT LIKE '%New translations%'
+            AND message NOT LIKE '%golf%'
+            AND message NOT LIKE '%tweak%'
+            AND message NOT LIKE '%refactor%'
+        ;
+        ",
+    )?;
+
+    let mut commits = String::new();
+    for commit in stmt.query_map([], |row| {
+        Ok((
+            row.get(1)?, // repo
+            row.get(2)?, // sha
+            row.get(3)?, // username
+            row.get(4)?, // commited_at
+            row.get(5)?, // message
+            row.get(6)?, // url
+        ))
+    })? {
+        let (repo, sha, username, commited_at, message, url): (
+            String,
+            String,
+            String,
+            String,
+            String,
+            String,
+        ) = commit.unwrap();
+
+        commits.push_str(&format!(
+            "* {commited_at} - {repo} {username} - {message} [{sha}]({url})\n",
+            commited_at = &commited_at[0..10],
+            message = message.replace('\n', " "),
+            sha = &sha[0..7]
+        ));
+    }
+
+    let filename = "web/changelog_commits.md";
+    let mut file = File::create(filename).unwrap();
+    file.write_all(commits.as_bytes()).unwrap();
 
     Ok(())
 }

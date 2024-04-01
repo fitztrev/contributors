@@ -10,7 +10,7 @@
 2. Fetch the data from Github
 
     ```bash
-    cargo run -- fetch lichess-org
+    cargo run -- fetch lichess-org 2024-03-01 2024-03-31
     ```
 
 3. Optional: Cleanup the data
@@ -24,7 +24,7 @@
     insert into members (username) values ('user1'), ('user2');
     ```
 
-    or add a queries.sql file:
+    Or add a `queries.sql` file:
 
     ```bash
     sqlite3 database.sqlite < queries.sql
@@ -33,9 +33,9 @@
 4. Format the data
 
     ```bash
-    cargo run -- results 2023-01-01 2023-12-31
-    cargo run -- changelog 2023-01-01 2023-12-31
-    cargo run -- summary "Lichess" 2023-01-01 2023-12-31
+    cargo run -- results 2024-03-01 2024-03-31
+    cargo run -- changelog 2024-03-01 2024-03-31
+    cargo run -- summary "Lichess" 2024-03-01 2024-03-31
     ```
 
 5. View the report
@@ -44,7 +44,7 @@
     cargo run -- serve 9001
     ```
 
-   Visit http://localhost:9001
+    Visit http://localhost:9001
 
 ## Other Queries
 
@@ -64,6 +64,6 @@ select count(distinct username) from pull_requests;
 select count(*) from pull_requests;
 select * from pull_requests order by created_at asc limit 10;
 
-select count(distinct username) from pull_requests where created_at >= '2023-01-01' and created_at <= '2023-12-31';
-select count(*) from pull_requests where created_at >= '2023-01-01' and created_at <= '2023-12-31';
+select count(distinct username) from pull_requests where created_at >= '2024-01-01' and created_at <= '2024-01-31';
+select count(*) from pull_requests where created_at >= '2024-01-01' and created_at <= '2024-01-31';
 ```
