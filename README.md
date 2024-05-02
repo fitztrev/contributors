@@ -7,13 +7,19 @@
     export OPENAI_API_KEY=sk-abc123 # optional
     ```
 
-2. Fetch the data from Github
+2. Reset data
 
     ```bash
-    cargo run -- fetch lichess-org 2024-03-01 2024-03-31
+    rm -f database.sqlite
     ```
 
-3. Optional: Cleanup the data
+3. Fetch the data from Github
+
+    ```bash
+    cargo run -- fetch lichess-org 2024-04-01 2024-04-30
+    ```
+
+4. Optional: Cleanup the data
 
     ```
     sqlite3 database.sqlite
@@ -30,15 +36,15 @@
     sqlite3 database.sqlite < queries.sql
     ```
 
-4. Format the data
+5. Format the data
 
     ```bash
-    cargo run -- results 2024-03-01 2024-03-31
-    cargo run -- changelog 2024-03-01 2024-03-31
-    cargo run -- summary "Lichess" 2024-03-01 2024-03-31
+    cargo run -- results 2000-01-01 2024-04-30
+    cargo run -- changelog 2000-01-01 2024-04-30
+    cargo run -- summary "Lichess" 2000-01-01 2024-04-30
     ```
 
-5. View the report
+6. View the report
 
     ```bash
     cargo run -- serve 9001

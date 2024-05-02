@@ -26,6 +26,7 @@ struct MonthlyPullRequests {
     month: String,
     by_members: i32,
     by_non_members: i32,
+    total: i32,
 }
 
 #[allow(dead_code)]
@@ -325,7 +326,8 @@ fn results_pull_requests(since: &String, until: &String) -> rusqlite::Result<()>
         SELECT
             substr(pr.created_at, 0, 8) AS month,
             COUNT(CASE WHEN m.username IS NOT NULL THEN 1 END) AS count_pull_requests_by_members,
-            COUNT(CASE WHEN m.username IS NULL THEN 1 END) AS count_pull_requests_by_non_members
+            COUNT(CASE WHEN m.username IS NULL THEN 1 END) AS count_pull_requests_by_non_members,
+            COUNT(*) AS total
         FROM
             pull_requests pr
         LEFT JOIN
@@ -346,6 +348,7 @@ fn results_pull_requests(since: &String, until: &String) -> rusqlite::Result<()>
             month: row.get(0)?,
             by_members: row.get(1)?,
             by_non_members: row.get(2)?,
+            total: row.get(3)?,
         })
     })?;
 

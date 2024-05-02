@@ -20,6 +20,7 @@
   <body>
     <canvas id="results_first_time_contributions_5"></canvas>
     <canvas id="results_first_time_contributions_8"></canvas>
+    <canvas id="results_pull_requests_total"></canvas>
     <canvas id="results_pull_requests"></canvas>
 
     <script>
@@ -30,21 +31,6 @@
         ? ` to ${urlParams.get("org")}`
         : "";
 
-      const title = (text) => ({
-        plugins: {
-          title: {
-            display: true,
-            font: {
-              size: 24,
-            },
-            text: `${text}`,
-          },
-          // legend: {
-          //   display: true,
-          //   position: "bottom",
-          // },
-        },
-      });
       [
         "results_first_time_contributions_5",
         "results_first_time_contributions_8",
@@ -68,11 +54,64 @@
                   },
                 ],
               },
-              options: title("First Time Contributors" + titleSuffix),
+              options: {
+                plugins: {
+                  title: {
+                    display: true,
+                    font: {
+                      size: 24,
+                    },
+                    text: "First Time Contributors" + titleSuffix,
+                  },
+                  // legend: {
+                  //   display: true,
+                  //   position: "bottom",
+                  // },
+                },
+              },
             });
           })
           .catch((error) => console.error("Error fetching data:", error));
       });
+
+      fetch(`results_pull_requests.json?_t=${new Date().getTime()}`)
+        .then((response) => response.json())
+        .then((data) => {
+          const months = data.map((item) => item.month);
+          const total = data.map((item) => item.total);
+
+          const ctx = document
+            .getElementById("results_pull_requests_total")
+            .getContext("2d");
+          const barChart = new Chart(ctx, {
+            type: "bar",
+            data: {
+              labels: months,
+              datasets: [
+                {
+                  label: "# Pull Requests",
+                  data: total,
+                  backgroundColor: "rgb(61 161 230 / 60%)",
+                },
+              ],
+            },
+            options: {
+              plugins: {
+                title: {
+                  display: true,
+                  font: {
+                    size: 24,
+                  },
+                  text: "Total Pull Requests" + titleSuffix,
+                },
+                legend: {
+                  display: false,
+                },
+              },
+            },
+          });
+        })
+        .catch((error) => console.error("Error fetching data:", error));
 
       fetch(`results_pull_requests.json?_t=${new Date().getTime()}`)
         .then((response) => response.json())
@@ -98,12 +137,24 @@
                   label: "By Community",
                   data: by_non_members,
                   backgroundColor: "rgb(252 103 132 / 60%)",
-                  // backgroundColor: "rgb(61 161 230 / 60%)",
+                  // backgroundColor: 'rgb(61 161 230 / 60%)',
                 },
               ],
             },
             options: {
-              ...title("Total Pull Requests" + titleSuffix),
+              plugins: {
+                title: {
+                  display: true,
+                  font: {
+                    size: 24,
+                  },
+                  text: "Total Pull Requests" + titleSuffix,
+                },
+                // legend: {
+                //   display: true,
+                //   position: "bottom",
+                // },
+              },
               scales: {
                 x: {
                   stacked: true,
