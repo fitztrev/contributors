@@ -409,7 +409,7 @@ fn direct_commits() -> rusqlite::Result<()> {
         ) = commit.unwrap();
 
         commits.push_str(&format!(
-            "* {commited_at} - {repo} {username} - {message} [{sha}]({url})\n",
+            "-   {commited_at} - {repo} {username} - {message} [{sha}]({url})\n",
             commited_at = &commited_at[0..10],
             message = message.replace('\n', " "),
             sha = &sha[0..7]
@@ -472,7 +472,7 @@ fn list_merged_pull_requests(
         };
 
         changelog.push_str(&format!(
-            "* {repo_prefix}{title} [#{pr_num}](https://github.com/lichess-org/{repo}/pull/{pr_num}) (thanks [{username}](https://github.com/{username}))\n",
+            "-   {repo_prefix}{title} [#{pr_num}](https://github.com/lichess-org/{repo}/pull/{pr_num}) (thanks [{username}](https://github.com/{username}))\n",
             title = capitalize_first_letter(&pr.title),
             pr_num = pr.pr_num,
             repo = pr.repo,
@@ -577,9 +577,18 @@ async fn summarize(org_name: &String, since: &String, until: &String) -> rusqlit
     .await
     .unwrap();
 
+    println!("");
     println!("**Tweet ideas:**");
     openai_prompt(&format!(
         "Write 5 ideas for Twitter posts about this summary. Do not use emojis or hash tags. {summary}"
+    ))
+    .await
+    .unwrap();
+
+    println!("");
+    println!("**Feed ideas:**");
+    openai_prompt(&format!(
+        "Write 5 ideas for short blurbs about this summary. Do not use emojis or hash tags. Include a markdown link for reading more to https://lichess.org/changelog : {summary}"
     ))
     .await
     .unwrap();
