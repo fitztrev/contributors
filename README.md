@@ -16,7 +16,7 @@
 3. Fetch the data from Github
 
     ```bash
-    cargo run -- fetch lichess-org 2024-08-01 2024-08-31
+    cargo run -- fetch lichess-org 2024-12-01 2024-12-31
     ```
 
 4. Optional: Cleanup the data
@@ -39,14 +39,14 @@
 5. Format the data
 
     ```bash
-    cargo run -- changelog 2024-08-01 2024-08-31
-    cargo run -- summary "Lichess" 2024-08-01 2024-08-31
+    cargo run -- changelog 2024-12-01 2024-12-31
+    cargo run -- summary "Lichess" 2024-12-01 2024-12-31
     ```
 
 6. View the report
 
     ```bash
-    cargo run -- results 2024-08-01 2024-08-31
+    cargo run -- results 2024-12-01 2024-12-31
     cargo run -- serve 9001
     ```
 
