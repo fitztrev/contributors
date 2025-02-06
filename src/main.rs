@@ -282,10 +282,10 @@ fn results_first_time_contributions(
             "
         SELECT first_date as date, COUNT(username) as count
         from (
-            SELECT username, substr(MIN(created_at), 0, {length}) AS first_date
+            SELECT username, substr(MIN(merged_at), 0, {length}) AS first_date
                 FROM pull_requests pr
                 WHERE
-                    pr.created_at >= '{since}' AND pr.created_at <= '{until}'
+                    pr.merged_at >= '{since}' AND pr.merged_at <= '{until}'
                 GROUP BY username
         )
         GROUP BY date
@@ -324,7 +324,7 @@ fn results_pull_requests(since: &String, until: &String) -> rusqlite::Result<()>
         format!(
             "
         SELECT
-            substr(pr.created_at, 0, 8) AS month,
+            substr(pr.merged_at, 0, 8) AS month,
             COUNT(CASE WHEN m.username IS NOT NULL THEN 1 END) AS count_pull_requests_by_members,
             COUNT(CASE WHEN m.username IS NULL THEN 1 END) AS count_pull_requests_by_non_members,
             COUNT(*) AS total
@@ -333,7 +333,7 @@ fn results_pull_requests(since: &String, until: &String) -> rusqlite::Result<()>
         LEFT JOIN
             members m ON pr.username = m.username
         WHERE
-            pr.created_at >= '{since}' AND pr.created_at <= '{until}'
+            pr.merged_at >= '{since}' AND pr.merged_at <= '{until}'
         GROUP BY
             month
         ORDER BY
@@ -529,7 +529,7 @@ async fn summarize(org_name: &String, since: &String, until: &String) -> rusqlit
         FROM
             pull_requests pr
         WHERE
-            pr.created_at >= ?1 AND pr.created_at <= ?2;;
+            pr.merged_at >= ?1 AND pr.merged_at <= ?2;;
         ",
     )?;
     let mut rows = stmt.query([since, until])?;
@@ -545,9 +545,9 @@ async fn summarize(org_name: &String, since: &String, until: &String) -> rusqlit
         FROM
             pull_requests pr
         WHERE
-            pr.created_at >= ?1 AND pr.created_at <= ?2
+            pr.merged_at >= ?1 AND pr.merged_at <= ?2
             AND username NOT IN
-                (SELECT distinct username FROM pull_requests WHERE created_at < ?1);
+                (SELECT distinct username FROM pull_requests WHERE merged_at < ?1);
         ",
     )?;
     let mut rows = stmt.query([since, until])?;
@@ -559,7 +559,7 @@ async fn summarize(org_name: &String, since: &String, until: &String) -> rusqlit
         {org_name} Github Summary for {since} to {until}
         ---------------------------------------------------
 
-        Total pull requests: {count_pull_requests}
+        Total merged pull requests: {count_pull_requests}
         Total repos with pull requests: {count_repos}
         Total contributors: {count_contributors}
         First time contributors: {new_contributors}
