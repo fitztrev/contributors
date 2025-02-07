@@ -56,17 +56,22 @@ async fn main() {
             fetch(org, &args[3], &args[4]).await.unwrap();
         }
         "results" => {
-            results_first_time_contributions(&args[2], &args[3], 5).unwrap(); // yearly
-            results_first_time_contributions(&args[2], &args[3], 8).unwrap(); // monthly
-            results_pull_requests(&args[2], &args[3]).unwrap();
+            // SQL date query is string comparison and is not end-date inclusive
+            let until = next_day(&args[3]);
+            results_first_time_contributions(&args[2], &until, 5).unwrap(); // yearly
+            results_first_time_contributions(&args[2], &until, 8).unwrap(); // monthly
+            results_pull_requests(&args[2], &until).unwrap();
             direct_commits().unwrap();
         }
         "changelog" => {
-            list_merged_pull_requests(&args[2], &args[3], true).unwrap();
-            list_merged_pull_requests(&args[2], &args[3], false).unwrap();
+            let until = next_day(&args[3]);
+            list_merged_pull_requests(&args[2], &until, true).unwrap();
+            list_merged_pull_requests(&args[2], &until, false).unwrap();
         }
         "summary" => {
-            summarize(&args[2], &args[3], &args[4]).await.unwrap();
+            summarize(&args[2], &args[3], &next_day(&args[4]))
+                .await
+                .unwrap();
         }
         "serve" => {
             let port = args
@@ -269,6 +274,21 @@ async fn fetch_commits_for_repo(
     }
 
     Ok(())
+}
+
+fn next_day(date: &String) -> String {
+    let date = Utc
+        .with_ymd_and_hms(
+            date[0..4].parse().unwrap(),
+            date[5..7].parse().unwrap(),
+            date[8..10].parse().unwrap(),
+            0,
+            0,
+            0,
+        )
+        .unwrap();
+    let next_day = date + chrono::TimeDelta::days(1);
+    next_day.format("%Y-%m-%d").to_string()
 }
 
 fn results_first_time_contributions(
