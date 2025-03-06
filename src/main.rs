@@ -129,22 +129,8 @@ async fn fetch(org: &str, since: &str, until: &str) -> octocrab::Result<()> {
 
     let octocrab = OctocrabBuilder::new().personal_token(token).build()?;
 
-    let date_since = Utc.with_ymd_and_hms(
-        since[0..4].parse().unwrap(),
-        since[5..7].parse().unwrap(),
-        since[8..10].parse().unwrap(),
-        0,
-        0,
-        0,
-    );
-    let date_until = Utc.with_ymd_and_hms(
-        until[0..4].parse().unwrap(),
-        until[5..7].parse().unwrap(),
-        until[8..10].parse().unwrap(),
-        23,
-        59,
-        59,
-    );
+    let date_since = parse_date(since, false);
+    let date_until = parse_date(until, true);
 
     fetch_commits_for_repo(&octocrab, &conn, org, "lila", date_since, date_until).await?;
     fetch_commits_for_repo(&octocrab, &conn, org, "mobile", date_since, date_until).await?;
@@ -276,17 +262,21 @@ async fn fetch_commits_for_repo(
     Ok(())
 }
 
+fn parse_date(date_str: &str, until: bool) -> LocalResult<DateTime<Utc>> {
+    let parts: Vec<u32> = date_str
+        .split('-')
+        .map(|p| p.parse().unwrap())
+        .collect();
+
+    let (year, month, day) = (parts[0], parts[1], parts[2]);
+
+    let (hour, min, sec) = if until { (23, 59, 59) } else { (0, 0, 0) };
+
+    Utc.with_ymd_and_hms(year as i32, month, day, hour, min, sec)
+}
+
 fn next_day(date: &String) -> String {
-    let date = Utc
-        .with_ymd_and_hms(
-            date[0..4].parse().unwrap(),
-            date[5..7].parse().unwrap(),
-            date[8..10].parse().unwrap(),
-            0,
-            0,
-            0,
-        )
-        .unwrap();
+    let date = parse_date(date, false).unwrap();
     let next_day = date + chrono::TimeDelta::days(1);
     next_day.format("%Y-%m-%d").to_string()
 }
@@ -397,7 +387,7 @@ fn direct_commits() -> rusqlite::Result<()> {
         FROM
             commits
         WHERE
-            username in ('ornicar', 'veloce')
+            username in ('ornicar', 'veloce', 'lakinwecker', 'fitztrev', 'niklasf', 'lenguyenthanh', 'lukhas', 'isaacl', 'trevorbayless', 'thomas-daniels', 'benediktwerner', 'kraktus', 'fituby', 'schlawg')
             AND message NOT LIKE '%Merge%'
             AND message NOT LIKE '%New Crowdin updates%'
             AND message NOT LIKE '%New translations%'
